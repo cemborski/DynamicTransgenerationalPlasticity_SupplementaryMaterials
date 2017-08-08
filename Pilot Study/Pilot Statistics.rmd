@@ -1,0 +1,1059 @@
+```{r,  echo=FALSE, message=FALSE, results='hide', warning=FALSE}
+#Install and open packages
+install.packages("ggplot2", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("gridExtra", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("RColorBrewer", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("reshape", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("car", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("lmtest", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("boot", repos="http://ftp.ussg.iu.edu/CRAN/")
+```
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2); packageVersion("ggplot2")
+library(bear); packageVersion("bear")
+library(gridExtra); packageVersion("gridExtra")
+library(RColorBrewer); packageVersion("RColorBrewer")
+library(reshape); packageVersion("reshape")
+library(car); packageVersion("car")
+library(lmtest); packageVersion("lmtest")
+library(tidyr); packageVersion("tidyr")
+library(dplyr); packageVersion("dplyr")
+library(broom); packageVersion("broom")
+library(boot); packageVersion("boot")
+``````
+
+```{r}
+#import Pilot Data
+
+head(data)
+
+#twosidep function to determine bootstrapped p-value
+twosidep<-function(data){
+   p1<-sum(data>0)/length(data)
+   p2<-sum(data<0)/length(data)
+   p<-min(p1,p2)*2
+   return(p)
+}
+```
+
+
+```{r}
+
+data$Generation <- factor(data$Generation, levels=c("F0", "F1", "F2", "F3", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+dataTa <- data
+
+#Outliers removed based on bonferonni outlier test 
+#e.g. outlierTest(GlucSugMod)
+dataG <- data[-c(49,81,94),]
+dataT <- data[-c(32,110,111,118,206,251,255,259,281,321,429),]
+dataY <- data[-c(65,73,80,468),]
+
+##IS THERE A SEX SPECIFIC EFFECT?
+#Hn: Metabolite concentrations do not significantly differ between genders.
+#Ho: Metabolite concentrations do significantly differ between genders.
+
+GlucSugMod <- lm(Glucose~Sugar.Weight+Sex,  data=dataG)
+plot(resid(GlucSugMod))
+hist(resid(GlucSugMod))
+summary(GlucSugMod)
+#write.csv(tidy(GlucSugMod), file="GlucGen.csv")
+
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #Sexmale
+twosidep(results$t[,3])
+
+
+TrehSugMod <- lm(Trehalose~Sugar.Weight+Sex,  data=dataT)
+plot(resid(TrehSugMod))
+hist(resid(TrehSugMod))
+summary(TrehSugMod)
+#write.csv(tidy(TrehSugMod), file="TrehGen.csv")
+
+rsq <- function(data, indices) { #bootstrap function
+  d <- data[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=data, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #Sexmale
+twosidep(results$t[,3])
+
+GlycSugMod <- lm(Glycogen~Sugar.Weight+Sex,  data=dataY)
+plot(resid(GlycSugMod))
+hist(resid(GlycSugMod))
+summary(GlycSugMod)
+#write.csv(tidy(GlycSugMod), file="GlycGen.csv")
+
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #Sexmale
+twosidep(results$t[,3])
+
+```
+
+Generally, linear regressions were used to test for significant relationships between variables, where fixed variables comprised of treatments, gender, generation, and when possible, were normalized to fly weight. Bootstrapping was used to validate the model assumptions, and when discrepancies arose, the bootstrap value was followed.  
+  
+```{r}
+#CAN ANCESTRAL DIET ALTER METABOLISM IN SUBSEQUENT GENERATIONS?
+#Hn: Varying sugar diet does not affect metabolic phenotypes in Drosophila melanogaster.
+#Ho: Varying sugar diet does affect metabolic phenotypes in Drosophila melanogaster.
+
+
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F0", "F1", "F2", "F3", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G0F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G0F.Mod))
+hist(resid(G0F.Mod)) #ok
+summary(G0F.Mod)
+rsq <- function(data, indices) { #bootstrap function
+  d <- data[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=data, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+T0F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T0F.Mod))
+hist(resid(T0F.Mod)) #ok
+summary(T0F.Mod)
+rsq <- function(data, indices) { #bootstrap function
+  d <- data[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=data, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y0F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y0F.Mod))
+hist(resid(Y0F.Mod)) #ok
+summary(Y0F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+
+G0M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G0M.Mod))
+hist(resid(G0M.Mod)) #ok
+summary(G0M.Mod)
+rsq <- function(data, indices) { #bootstrap function
+  d <- data[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=data, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T0M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T0M.Mod))
+hist(resid(T0M.Mod)) #ok
+summary(T0M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=data, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y0M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y0M.Mod))
+hist(resid(Y0M.Mod)) #ok
+summary(Y0M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+
+#CAN ANCESTRAL DIET ALTER METABOLISM IN SUBSEQUENT GENERATIONS?
+#Hn: Ancestral diet does not affect metabolic phenotypes in subsequent generations.
+#Ho: Ancestral diet does affect metabolic phenotypes in subsequent generations.
+
+##################   F1   ######################
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F1", "F0", "F2", "F3", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G1F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G1F.Mod))
+hist(resid(G1F.Mod)) #ok
+summary(G1F.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T1F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T1F.Mod))
+hist(resid(T1F.Mod)) #ok
+summary(T1F.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y1F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y1F.Mod))
+hist(resid(Y1F.Mod)) #ok
+summary(Y1F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G1M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G1M.Mod))
+hist(resid(G1M.Mod)) #ok
+summary(G1M.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T1M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T1M.Mod))
+hist(resid(T1M.Mod)) #ok
+summary(T1M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y1M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y1M.Mod))
+hist(resid(Y1M.Mod)) #ok
+summary(Y1M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+####################  F2  ###########################
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F2", "F0", "F1", "F3", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G2F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G2F.Mod))
+hist(resid(G2F.Mod)) #ok
+summary(G2F.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T2F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T2F.Mod))
+hist(resid(T2F.Mod)) #ok
+summary(T2F.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y2F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y2F.Mod))
+hist(resid(Y2F.Mod)) #ok
+summary(Y2F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta2F.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta2F.Mod))
+# hist(resid(Ta2F.Mod)) #ok
+# summary(Ta2F.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=3) #CD males relative to control females
+# twosidep(results$t[,3])
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G2M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G2M.Mod))
+hist(resid(G2M.Mod)) #ok
+summary(G2M.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T2M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T2M.Mod))
+hist(resid(T2M.Mod)) #ok
+summary(T2M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y2M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y2M.Mod))
+hist(resid(Y2M.Mod)) #ok
+summary(Y2M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta2M.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta2M.Mod))
+# hist(resid(Ta2M.Mod)) #ok
+# summary(Ta2M.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
+
+##############  F3  #####################
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F3", "F0", "F1", "F2", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G3F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G3F.Mod))
+hist(resid(G3F.Mod)) #ok
+summary(G3F.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T3F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T3F.Mod))
+hist(resid(T3F.Mod)) #ok
+summary(T3F.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y3F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y3F.Mod))
+hist(resid(Y3F.Mod)) #ok
+summary(Y3F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta3F.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta3F.Mod))
+# hist(resid(Ta3F.Mod)) #ok
+# summary(Ta3F.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=3) #CD males relative to control females
+# twosidep(results$t[,3])
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G3M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G3M.Mod))
+hist(resid(G3M.Mod)) #ok
+summary(G3M.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T3M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T3M.Mod))
+hist(resid(T3M.Mod)) #ok
+summary(T3M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y3M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y3M.Mod))
+hist(resid(Y3M.Mod)) #ok
+summary(Y3M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta3M.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta3M.Mod))
+# hist(resid(Ta3M.Mod)) #ok
+# summary(Ta3M.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+# 
+
+
+#########################  F4  ################################
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F4", "F0", "F1", "F2", "F3", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G4F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G4F.Mod))
+hist(resid(G4F.Mod)) #ok
+summary(G4F.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T4F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T4F.Mod))
+hist(resid(T4F.Mod)) #ok
+summary(T4F.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y4F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y4F.Mod))
+hist(resid(Y4F.Mod)) #ok
+summary(Y4F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta4F.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta4F.Mod))
+# hist(resid(Ta4F.Mod)) #ok
+# summary(Ta4F.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=3) #CD males relative to control females
+# twosidep(results$t[,3])
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G4M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G4M.Mod))
+hist(resid(G4M.Mod)) #ok
+summary(G4M.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T4M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T4M.Mod))
+hist(resid(T4M.Mod)) #ok
+summary(T4M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y4M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y4M.Mod))
+hist(resid(Y4M.Mod)) #ok
+summary(Y4M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta4M.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta4M.Mod))
+# hist(resid(Ta4M.Mod)) #ok
+# summary(Ta4M.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+# 
+
+
+#######################  F5  ############################
+#Arranges data in the correct desirable order for comparisons:
+data$Generation <- factor(data$Generation, levels=c("F5", "F0", "F1", "F2", "F3", "F4"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G5F.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G5F.Mod))
+hist(resid(G5F.Mod)) #ok
+summary(G5F.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T5F.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T5F.Mod))
+hist(resid(T5F.Mod)) #ok
+summary(T5F.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y5F.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y5F.Mod))
+hist(resid(Y5F.Mod)) #ok
+summary(Y5F.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=3) #CD males relative to control females
+twosidep(results$t[,3])
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta5F.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta5F.Mod))
+# hist(resid(Ta5F.Mod)) #ok
+# summary(Ta5F.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=3) #CD males relative to control females
+# twosidep(results$t[,3])
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
+## Males
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+dataG <- data[-c(39,49,80,81,94,161),]
+dataT <- data[-c(88,118,206,251,255,259,281,321,360),]
+dataY <- data[-c(73,80,97,315),]
+
+G5M.Mod <- glm(Glucose~Sugar.Weight + Sex*Treatment*Generation, data=dataG)
+plot(resid(G5M.Mod))
+hist(resid(G5M.Mod)) #ok
+summary(G5M.Mod)
+rsq <- function(dataG, indices) { #bootstrap function
+  d <- dataG[indices, ] # allows boot to select sample 
+  fit <- lm(Glucose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataG, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+T5M.Mod <- glm(Trehalose~Sugar.Weight + Sex*Treatment*Generation, data=dataT)
+plot(resid(T5M.Mod))
+hist(resid(T5M.Mod)) #ok
+summary(T5M.Mod)
+rsq <- function(dataT, indices) { #bootstrap function
+  d <- dataT[indices, ] # allows boot to select sample 
+  fit <- lm(Trehalose~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataT, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+Y5M.Mod <- glm(Glycogen~Sugar.Weight + Sex*Treatment*Generation, data=dataY)
+plot(resid(Y5M.Mod))
+hist(resid(Y5M.Mod)) #ok
+summary(Y5M.Mod)
+rsq <- function(dataY, indices) { #bootstrap function
+  d <- dataY[indices, ] # allows boot to select sample 
+  fit <- lm(Glycogen~Sugar.Weight+Sex*Treatment*Generation, data=d)
+  return(coef(fit))}
+set.seed(12345)
+results <- boot(data=dataY, statistic=rsq, R=10000) # 10,000 samples
+boot.ci(results, type="bca", index=4) #TreatmentNSD
+twosidep(results$t[,4])
+boot.ci(results, type="bca", index=5) #TreatmentLSD
+twosidep(results$t[,5])
+boot.ci(results, type="bca", index=6) #TreatmentHSD
+twosidep(results$t[,6])
+
+
+# Ta5M.Mod <- glm(TAG~Fat.Weight + Sex*Treatment*Generation, data=dataTa)
+# plot(resid(Ta5M.Mod))
+# hist(resid(Ta5M.Mod)) #ok
+# summary(Ta5M.Mod)
+# rsq <- function(dataTa, indices) { #bootstrap function
+#   d <- dataTa[indices, ] # allows boot to select sample 
+#   fit <- lm(TAG~Fat.Weight+Sex*Treatment*Generation, data=d)
+#   return(coef(fit))}
+# set.seed(12345)
+# results <- boot(data=dataTa, statistic=rsq, R=10000) # 10,000 samples
+# boot.ci(results, type="bca", index=4) #TreatmentNSD
+# twosidep(results$t[,4])
+# boot.ci(results, type="bca", index=5) #TreatmentLSD
+# twosidep(results$t[,5])
+# boot.ci(results, type="bca", index=6) #TreatmentHSD
+# twosidep(results$t[,6])
+
+
