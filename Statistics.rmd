@@ -30,7 +30,7 @@ Import data. Data file can be found in master repository.
 ```{r }
 head(data)
 ```
-Linear regressions were used to test for significant relationships between variables, where fixed variables comprised of treatments, gender, generation, and when possible, were normalized to fly weight. 
+Linear regressions were used to test for significant relationships between variables, where (with the exception of the analysis of variability between control generations) fixed variables comprised of treatments, gender, generation, and when possible, were normalized to fly weight.
 
 To use a generalized linear regression, the following assumptions were met: 1) the y-values (i.e. errors) were independent; 2) The y-values were expressed as a linear function of the X variable (minor deviations don't tend to effect multiple regression provided that the majority of the points are linear, see http://www.statsoft.com/Textbook/Multiple-Regression); 3) The variance was homoscedastic; 4) The data was normally distributed.  
 
@@ -44,6 +44,33 @@ twosidep<-function(data){
    p<-min(p1,p2)*2
    return(p)
 }
+
+
+#####################################################################################
+
+##DO CONTROLS VARY ACROSS GENERATIONS?
+#Hn: Metabolite concentrations and/or weight do not significantly vary across generations.
+Ho: Metabolite concentrations and/or weight significantly vary across generations.
+
+CD <- subset(data, Treatment=="CD")
+
+Wt <- lm(Sugar.Weight~Generation,CD)
+summary(Wt)
+
+Gluc <- lm(Glucose~Generation,CD)
+summary(Gluc)
+
+Treh <- lm(Trehalose~Generation, CD)
+summary(Treh)
+
+Glyc <- lm(Glycogen~Generation,CD)
+summary(Glyc)
+
+TAG <- lm(TAG~Generation,CD)
+summary(TAG)
+
+
+#####################################################################################
 
 ##IS THERE A SEX SPECIFIC EFFECT?
 #Hn: Metabolite concentrations and fitness do not significantly differ between genders.
