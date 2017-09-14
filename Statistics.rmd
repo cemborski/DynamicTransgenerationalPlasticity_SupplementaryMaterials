@@ -48,30 +48,6 @@ twosidep<-function(data){
 
 #####################################################################################
 
-##DO CONTROLS VARY ACROSS GENERATIONS?
-#Hn: Metabolite concentrations and/or weight do not significantly vary across generations.
-Ho: Metabolite concentrations and/or weight significantly vary across generations.
-
-CD <- subset(data, Treatment=="CD")
-
-Wt <- lm(Sugar.Weight~Generation,CD)
-summary(Wt)
-
-Gluc <- lm(Glucose~Generation,CD)
-summary(Gluc)
-
-Treh <- lm(Trehalose~Generation, CD)
-summary(Treh)
-
-Glyc <- lm(Glycogen~Generation,CD)
-summary(Glyc)
-
-TAG <- lm(TAG~Generation,CD)
-summary(TAG)
-
-
-#####################################################################################
-
 ##IS THERE A SEX SPECIFIC EFFECT?
 #Hn: Metabolite concentrations and fitness do not significantly differ between genders.
 #Ho: Metabolite concentrations and fitness do significantly differ between genders.
