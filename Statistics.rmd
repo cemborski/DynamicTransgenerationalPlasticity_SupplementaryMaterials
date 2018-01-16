@@ -1,13 +1,3 @@
----
-title: "Ch2 Updated Stats (Github) with PLC and FDR"
-author: "Carmen Emborski"
-date: "12/28/2017"
-output:
-  word_document:
-    highlight: pygments
-  pdf_document: default
-  html_document: default
----
 
 Install and open packages
 ```{r, message=FALSE, warning=FALSE}
