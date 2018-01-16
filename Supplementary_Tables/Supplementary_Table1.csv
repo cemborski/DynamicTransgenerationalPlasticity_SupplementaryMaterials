@@ -1,5 +1,0 @@
-Metabolite,Sex,estimate,std.error,statistic,p.value,Bootstrap CI,Bootstrap p.value,Signficance
-Glucose,Sex:Male,1.1206,0.5031,2.227,0.0261,"(-0.061,  2.233 ) ",0.0568,
-Trehalose,Sex:Male,-5.1484,1.118,-4.605,4.46E-06,"(-7.718, -2.732 )",<0.0001,***
-Glycogen,Sex:Male,6.598,1.794,3.678,0.000243,"( 2.199, 10.525 )",0.0022,**
-Triglycerides,Sex:Male,18.48,5.496,3.362,0.000791,"( 7.09, 29.92 )",0.0022,**
