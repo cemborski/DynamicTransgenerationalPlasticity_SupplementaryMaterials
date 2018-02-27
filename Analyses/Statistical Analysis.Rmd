@@ -1,0 +1,1093 @@
+---
+title: "Ch2 Updated Stats (Github) with PLC and FDR"
+author: "Carmen Emborski"
+date: "12/28/2017"
+output:
+  word_document:
+    highlight: pygments
+  pdf_document: default
+  html_document: default
+---
+
+Install and open packages
+```{r, message=FALSE, warning=FALSE}
+install.packages("ggplot2", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("bear", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("gridExtra", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("RColorBrewer", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("reshape", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("car", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("lmtest", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("tidyr", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("dplyr", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("broom", repos="http://ftp.ussg.iu.edu/CRAN/")
+install.packages("boot", repos="http://ftp.ussg.iu.edu/CRAN/")
+
+library(RCurl); packageVersion("RCurl")
+library(ggplot2); packageVersion("ggplot2")
+library(bear); packageVersion("bear")
+library(grid); packageVersion("grid")
+library(gridExtra); packageVersion("gridExtra")
+library(RColorBrewer); packageVersion("RColorBrewer")
+library(reshape); packageVersion("reshape")
+library(car); packageVersion("car")
+library(lmtest); packageVersion("lmtest")
+library(tidyr); packageVersion("tidyr")
+library(dplyr); packageVersion("dplyr")
+library(plyr); packageVersion("plyr")
+library(broom); packageVersion("broom")
+library(boot); packageVersion("boot")
+library(nlme); packageVersion("boot")
+library(multcomp); packageVersion("multcomp")
+```
+Import data. Data file can be found in master repository.
+```{r}
+data <- read.csv(text=getURL("https://raw.githubusercontent.com/cemborski/DynamicTransgenerationalPlasticity_SupplementaryMaterials/master/data.csv"), header=T)
+
+head(data)
+```
+Linear regressions were used to calculated residuals for the multivariate model. Prior to analysis, linear model assumptions were checked.
+
+Notably, for each model, the first letter corresponds to the sex analyzed (i.e. F = female, M = male). The second letter corresponds to the metabolite measured variable (i.e. G = Glucose, T = Trehalose, Y = Glycogen, Ta = Triglycerides/TAG, F = Fitness). The third variable is a number, which corresponds to the generation (i.e. 0 = F0, 1 = F1...). 
+
+H1: Sex-Specific Differences
+```{r, warning=FALSE}
+#####################################################################################
+
+##IS THERE A SEX SPECIFIC EFFECT?
+#H: Metabolite concentrations and fitness do not significantly differ between genders.
+#Ho: Metabolite concentrations and fitness do significantly differ between genders.
+
+data$Generation <- factor(data$Generation, levels=c("F0", "F1", "F2", "F3", "F4", "F5"))
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+
+GlucSugMod <- lm(Glucose~Sugar.Weight+Sex,  data=data)
+#summary(GlucSugMod)
+SexGlucP <- summary(GlucSugMod)$coefficients[3,4]
+
+TrehSugMod <- lm(Trehalose~Sugar.Weight+Sex,  data=data)
+#summary(TrehSugMod)
+SexTrehP <- summary(TrehSugMod)$coefficients[3,4]
+
+GlycSugMod <- lm(Glycogen~Sugar.Weight+Sex,  data=data)
+#summary(GlycSugMod)
+SexGlycP <- summary(GlycSugMod)$coefficients[3,4]
+
+FatMod <- lm(TAG~Fat.Weight+Sex,  data=data)
+#summary(FatMod)
+SexFatP <- summary(FatMod)$coefficients[3,4]
+
+SuppTable1 <- matrix(c(SexGlucP, SexTrehP, SexGlycP, SexFatP))
+colnames(SuppTable1) <- "p.values"
+rownames(SuppTable1) <- c("Female v Male Glucose", "Female v Male Trehalose", "Female v Male Glycogen", "Female v Male Triglycerides")
+SuppTable1 <- as.table(SuppTable1)
+SuppTable1Symnum <- symnum(SuppTable1, corr = FALSE, na = FALSE, cutpoints = c(0, 
+    0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ".", " "))
+SuppTable1Sig <- cbind(SuppTable1, SuppTable1Symnum)
+write.csv(SuppTable1Sig, file = "Supplementary Table 1.Sex Specific Comparisons.csv")
+
+```
+H2: Treatment Effects
+```{r}
+#Female TAG
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+#Run Models
+Ta.0F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+Ta.1F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+Ta.2F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+Ta.3F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+Ta.4F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+Ta.5F.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See Ta.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Ta.F.results.df <- rbind(tidy(Ta.0F.Mod) %>% mutate(model = "F0"),
+                 tidy(Ta.1F.Mod) %>% mutate(model = "F1"),
+                 tidy(Ta.2F.Mod) %>% mutate(model = "F2"),
+                 tidy(Ta.3F.Mod) %>% mutate(model = "F3"),
+                 tidy(Ta.4F.Mod) %>% mutate(model = "F4"),
+                 tidy(Ta.5F.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexmale", term), "male", "female")) %>% 
+  filter(grepl("female", sex))
+  
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+#Male TAG
+#Run Models
+Ta.0M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+Ta.1M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+Ta.2M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+Ta.3M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+Ta.4M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+Ta.5M.Mod <- lm(TAG~Fat.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See Ta.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Ta.M.results.df <- rbind(tidy(Ta.0M.Mod) %>% mutate(model = "F0"),
+                 tidy(Ta.1M.Mod) %>% mutate(model = "F1"),
+                 tidy(Ta.2M.Mod) %>% mutate(model = "F2"),
+                 tidy(Ta.3M.Mod) %>% mutate(model = "F3"),
+                 tidy(Ta.4M.Mod) %>% mutate(model = "F4"),
+                 tidy(Ta.5M.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexfemale", term), "female", "male")) %>% 
+  filter(!grepl("female", sex))
+
+Ta.results.df <- rbind(Ta.F.results.df, Ta.M.results.df)
+colnames(Ta.results.df)[c(1,6,7)] <- c("variable", "generation", "treatment") 
+
+
+
+
+#Female Glycogen
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+#Run Models
+Y.0F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+Y.1F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+Y.2F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+Y.3F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+Y.4F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+Y.5F.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See Y.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Y.F.results.df <- rbind(tidy(Y.0F.Mod) %>% mutate(model = "F0"),
+                 tidy(Y.1F.Mod) %>% mutate(model = "F1"),
+                 tidy(Y.2F.Mod) %>% mutate(model = "F2"),
+                 tidy(Y.3F.Mod) %>% mutate(model = "F3"),
+                 tidy(Y.4F.Mod) %>% mutate(model = "F4"),
+                 tidy(Y.5F.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexmale", term), "male", "female")) %>% 
+  filter(grepl("female", sex))
+  
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+#Male Glycogen
+#Run Models
+Y.0M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+Y.1M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+Y.2M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+Y.3M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+Y.4M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+Y.5M.Mod <- lm(Glycogen~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See Y.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Y.M.results.df <- rbind(tidy(Y.0M.Mod) %>% mutate(model = "F0"),
+                 tidy(Y.1M.Mod) %>% mutate(model = "F1"),
+                 tidy(Y.2M.Mod) %>% mutate(model = "F2"),
+                 tidy(Y.3M.Mod) %>% mutate(model = "F3"),
+                 tidy(Y.4M.Mod) %>% mutate(model = "F4"),
+                 tidy(Y.5M.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexfemale", term), "female", "male")) %>% 
+  filter(!grepl("female", sex))
+
+Y.results.df <- rbind(Y.F.results.df, Y.M.results.df)
+colnames(Y.results.df)[c(1,6,7)] <- c("variable", "generation", "treatment") 
+
+
+
+#Female Trehalose
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+#Run Models
+T.0F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+T.1F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+T.2F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+T.3F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+T.4F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+T.5F.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See T.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+T.F.results.df <- rbind(tidy(T.0F.Mod) %>% mutate(model = "F0"),
+                 tidy(T.1F.Mod) %>% mutate(model = "F1"),
+                 tidy(T.2F.Mod) %>% mutate(model = "F2"),
+                 tidy(T.3F.Mod) %>% mutate(model = "F3"),
+                 tidy(T.4F.Mod) %>% mutate(model = "F4"),
+                 tidy(T.5F.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexmale", term), "male", "female")) %>% 
+  filter(grepl("female", sex))
+  
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+#Male Trehalose
+#Run Models
+T.0M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+T.1M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+T.2M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+T.3M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+T.4M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+T.5M.Mod <- lm(Trehalose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See T.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+T.M.results.df <- rbind(tidy(T.0M.Mod) %>% mutate(model = "F0"),
+                 tidy(T.1M.Mod) %>% mutate(model = "F1"),
+                 tidy(T.2M.Mod) %>% mutate(model = "F2"),
+                 tidy(T.3M.Mod) %>% mutate(model = "F3"),
+                 tidy(T.4M.Mod) %>% mutate(model = "F4"),
+                 tidy(T.5M.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexfemale", term), "female", "male")) %>% 
+  filter(!grepl("female", sex))
+
+T.results.df <- rbind(T.F.results.df, T.M.results.df)
+colnames(T.results.df)[c(1,6,7)] <- c("variable", "generation", "treatment") 
+
+
+
+#Female Glucose
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+#Run Models
+G.0F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+G.1F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+G.2F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+G.3F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+G.4F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+G.5F.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See G.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+G.F.results.df <- rbind(tidy(G.0F.Mod) %>% mutate(model = "F0"),
+                 tidy(G.1F.Mod) %>% mutate(model = "F1"),
+                 tidy(G.2F.Mod) %>% mutate(model = "F2"),
+                 tidy(G.3F.Mod) %>% mutate(model = "F3"),
+                 tidy(G.4F.Mod) %>% mutate(model = "F4"),
+                 tidy(G.5F.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexmale", term), "male", "female")) %>% 
+  filter(grepl("female", sex))
+  
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("male", "female"))
+
+#Male Glucose
+#Run Models
+G.0M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F0"))
+G.1M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F1"))
+G.2M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F2"))
+G.3M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F3"))
+G.4M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F4"))
+G.5M.Mod <- lm(Glucose~Sugar.Weight + Sex*Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See G.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+G.M.results.df <- rbind(tidy(G.0M.Mod) %>% mutate(model = "F0"),
+                 tidy(G.1M.Mod) %>% mutate(model = "F1"),
+                 tidy(G.2M.Mod) %>% mutate(model = "F2"),
+                 tidy(G.3M.Mod) %>% mutate(model = "F3"),
+                 tidy(G.4M.Mod) %>% mutate(model = "F4"),
+                 tidy(G.5M.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexfemale", term), "female", "male")) %>% 
+  filter(!grepl("female", sex))
+
+G.results.df <- rbind(G.F.results.df, G.M.results.df)
+colnames(G.results.df)[c(1,6,7)] <- c("variable", "generation", "treatment") 
+
+
+
+#Female Fitness
+data$Treatment <- factor(data$Treatment, levels=c("CD", "NSD", "LSD", "HSD"))
+data$Sex <- factor(data$Sex, levels=c("female", "male"))
+
+#Run Models
+Fit.0F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F0"))
+Fit.1F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F1"))
+Fit.2F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F2"))
+Fit.3F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F3"))
+Fit.4F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F4"))
+Fit.5F.Mod <- lm(Fitness~Fit.Weight + Treatment, data=subset(data, Generation=="F5"))
+
+#Create Dataframe of Results (See Fit.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Fit.F.results.df <- rbind(tidy(Fit.0F.Mod) %>% mutate(model = "F0"),
+                 tidy(Fit.1F.Mod) %>% mutate(model = "F1"),
+                 tidy(Fit.2F.Mod) %>% mutate(model = "F2"),
+                 tidy(Fit.3F.Mod) %>% mutate(model = "F3"),
+                 tidy(Fit.4F.Mod) %>% mutate(model = "F4"),
+                 tidy(Fit.5F.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexmale", term), "male", "female")) %>% 
+  filter(grepl("female", sex))
+  
+ 
+
+#Create Dataframe of Results (See Fit.results.df)
+lastThree <- function(x) substr(x, nchar(x)-2, nchar(x))
+Fit.M.results.df <- rbind(tidy(Fit.0M.Mod) %>% mutate(model = "F0"),
+                 tidy(Fit.1M.Mod) %>% mutate(model = "F1"),
+                 tidy(Fit.2M.Mod) %>% mutate(model = "F2"),
+                 tidy(Fit.3M.Mod) %>% mutate(model = "F3"),
+                 tidy(Fit.4M.Mod) %>% mutate(model = "F4"),
+                 tidy(Fit.5M.Mod) %>% mutate(model = "F5")) %>%
+  filter(grepl("Treatment", term)) %>% 
+  mutate(diet = lastThree(term)) %>% 
+  mutate(sex = ifelse(grepl("Sexfemale", term), "female", "male")) %>% 
+  filter(!grepl("female", sex))
+
+Fit.results.df <- Fit.F.results.df
+colnames(Fit.results.df)[c(1,6,7)] <- c("variable", "generation", "treatment")
+
+
+
+
+
+
+#Combine the 4 data frames
+G.results.df$metabolite <- rep("Glucose", length(G.results.df$generation))
+T.results.df$metabolite <- rep("Trehalose", length(T.results.df$generation))
+Y.results.df$metabolite <- rep("Glycogen", length(Y.results.df$generation))
+Ta.results.df$metabolite <- rep("TAG", length(Ta.results.df$generation))
+Fit.results.df$metabolite <- rep("Fitness", length(Fit.results.df$generation)
+All <- rbind(Ta.results.df, Y.results.df, T.results.df, G.results.df, Fit.results.df) %>%
+  mutate(pAdj = p.adjust(p.value, method = "fdr"))
+All <- as.data.frame(All)
+AllSig <- symnum(All$pAdj, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ".", " "))
+AllSig <- cbind(All, AllSig)
+AllSig <- AllSig[c("metabolite", "generation", "treatment", "sex", "pAdj", "AllSig", "variable", "estimate", "std.error", "statistic", "p.value")]
+
+
+AllSig <- AllSig[with(AllSig, order(treatment)),]
+AllSig <- AllSig[with(AllSig, order(sex)),]
+AllSig <- AllSig[with(AllSig, order(metabolite)),]
+write.csv(AllSig, file = "Supplementary Table 2.Treatment vs. Control Contrast FDR corrected (AllSig).csv")
+
+
+
+
+
+#Plots:
+H2plotData <- data
+
+H2plotData <- H2plotData[with(H2plotData, order(Generation)),]
+
+#Separate Metabolites/Fitness data points
+Sugar <- H2plotData[,c(1:3,5:8)] #Sugar Data only
+Sugar <- Sugar[complete.cases(Sugar), ]
+Fat <- H2plotData[,c(1:3,9:10)] #Fat Data Only
+Fat <- Fat[complete.cases(Fat),]
+Fit <- H2plotData[,c(1:3,11:12)] #Fitness Data Only
+Fit <- Fit[complete.cases(Fit), ]
+
+#Normalize Values Across Generations ((Treatment/Wt)/(Control/Wt))
+#SUGARS (Glucose, Trehalose, Glycogen)
+Sugar.m <- melt(Sugar, 
+    id.vars=c("Generation", "Treatment", "Sex", "Sugar.Weight"), 
+    measure.vars=c("Glucose", "Trehalose", "Glycogen"))
+colnames(Sugar.m)[5] <- "Metabolite"
+SW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+  for(i in unique(Sugar.m$Generation))
+    for(j in unique(Sugar.m$Sex))
+      for(k in unique(Sugar.m$Treatment))
+        for(l in unique(Sugar.m$Metabolite)){
+        temp <- subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)
+        temp$SugarWt <- ((subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)$value)/(subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)$Sugar.Weight))
+        SW <- rbind(SW, temp)}
+SW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+  for(i in unique(SW$Generation))
+    for(j in unique(SW$Sex))
+      for(k in unique(SW$Treatment))
+        for(l in unique(SW$Metabolite)){
+        temp <- subset(SW, Generation == i & Sex == j & Treatment == k & Metabolite == l)
+        temp$PercentMetabWt <- (subset(SW, Generation == i & Sex == j & Treatment == k & Metabolite == l)$SugarWt)/mean(subset(SW, Generation == i & Sex == j & Treatment == "CD" & Metabolite == l)$SugarWt)
+SW.Norm <-  rbind(SW.Norm, temp)
+      }
+SW.Norm <- SW.Norm[with(SW.Norm, order(Metabolite)),]
+Glucose <- SW.Norm[c(1:1577),c(1:3,8)]
+colnames(Glucose)[4] <- "Glucose"
+Trehalose <- SW.Norm[c(1578:3154),c(1:3,8)]
+colnames(Trehalose)[4] <- "Trehalose"
+Glycogen <- SW.Norm[c(3155:4731),c(1:3,8)]
+colnames(Glycogen)[4] <- "Glycogen"
+
+
+#TAG
+TW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(Fat$Generation))
+    for(j in unique(Fat$Sex))
+      for(k in unique(Fat$Treatment)){
+        temp <- subset(Fat, Generation == i & Sex == j & Treatment == k)
+        temp$TAGWt <- ((subset(Fat, Generation == i & Sex == j & Treatment == k)$TAG)/(subset(Fat, Generation == i & Sex == j & Treatment == k)$Fat.Weight))
+        TW <- rbind(TW, temp)}
+TW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(TW$Generation))
+    for(j in unique(TW$Sex))
+      for(k in unique(TW$Treatment)){
+        temp <- subset(TW, Generation == i & Sex == j & Treatment == k)
+        temp$PercentMetabWt <- (subset(TW, Generation == i & Sex == j & Treatment == k)$TAGWt)/mean(subset(TW, Generation == i & Sex == j & Treatment == "CD")$TAGWt)
+TW.Norm <-  rbind(TW.Norm, temp)
+      }
+TAG <- TW.Norm[,c(1:3,7)]
+colnames(TAG)[4] <- "Triglycerides"
+
+
+#FIT
+Fit <- Fit[with(Fit, order(Fitness)),]
+Fit <- Fit[-c(721:1660),]
+FitW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), Fit=numeric())
+  for(i in unique(Fit$Generation))
+    for(j in unique(Fit$Sex))
+      for(k in unique(Fit$Treatment)){
+        temp <- subset(Fit, Generation == i & Sex == j & Treatment == k)
+        temp$FitWt <- ((subset(Fit, Generation == i & Sex == j & Treatment == k)$Fitness)/(subset(Fit, Generation == i & Sex == j & Treatment == k)$Fit.Weight))
+        FitW <- rbind(FitW, temp)}
+FitW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(FitW$Generation))
+    for(j in unique(FitW$Sex))
+      for(k in unique(FitW$Treatment)){
+        temp <- subset(FitW, Generation == i & Sex == j & Treatment == k)
+        temp$PercentMetabWt <- (subset(FitW, Generation == i & Sex == j & Treatment == k)$FitWt)/mean(subset(FitW, Generation == i & Sex == j & Treatment == "CD")$FitWt)
+FitW.Norm <-  rbind(FitW.Norm, temp)
+      }
+Fitness <- FitW.Norm[,c(1:3,7)]
+colnames(Fitness)[4] <- "Fitness"
+
+
+#Females
+F.G.N.p <- ggplot(subset(Glucose, Sex=="female" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("Glucose") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "***", cex=12) + 
+  annotate("text", 2, y = 2.2, label = "***", cex=12) + 
+  annotate("text", 3, y = 1.43, label = "**", cex=12) + 
+  annotate("text", 4, y = 1.72, label = "", cex=12) + 
+  annotate("text", 5, y = 1.78, label = "***", cex=12) + 
+  annotate("text", 6, y = 1.88, label = "*", cex=12) +
+  annotate("text", 6, y = 0.08, label = "A", cex=16) 
+F.G.N.p
+
+F.G.L.p <- ggplot(subset(Glucose, Sex=="female" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 1.4, label = "*", cex=12) + 
+  annotate("text", 2, y = 1.92, label = "***", cex=12) + 
+  annotate("text", 3, y = 1.55, label = "*", cex=12) + 
+  annotate("text", 4, y = 1.45, label = "*", cex=12) + 
+  annotate("text", 5, y = 1.82, label = "***", cex=12) + 
+  annotate("text", 6, y = 1.8, label = "", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "B", cex=16) 
+F.G.L.p
+
+F.G.H.p <- ggplot(subset(Glucose, Sex=="female" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.375, label = "*", cex=12) + 
+  annotate("text", 5, y = 1.47, label = "*", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "C", cex=16) 
+F.G.H.p
+
+
+F.T.N.p <- ggplot(subset(Trehalose, Sex=="female" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("Trehalose") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.9, label = "***", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "A", cex=16) 
+F.T.N.p
+
+F.T.L.p <- ggplot(subset(Trehalose, Sex=="female" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.7, label = "*", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "B", cex=16) 
+F.T.L.p
+
+F.T.H.p <- ggplot(subset(Trehalose, Sex=="female" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 2.35, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.6, label = "*", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 1.5, label = "*", cex=12) +
+  annotate("text", 6, y = 0.08, label = "C", cex=16)  
+F.T.H.p
+
+
+F.Y.N.p <- ggplot(subset(Glycogen, Sex=="female" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("Glycogen") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.65, label = "*", cex=12) + 
+  annotate("text", 5, y = 2.165, label = "***", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "D", cex=16)  
+F.Y.N.p
+
+F.Y.L.p <- ggplot(subset(Glycogen, Sex=="female" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 1, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 1.97, label = "*", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "*", cex=12) + 
+  annotate("text", 5, y = 2, label = "**", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "E", cex=16) 
+F.Y.L.p
+
+F.Y.H.p <- ggplot(subset(Glycogen, Sex=="female" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 1.755, label = "***", cex=12) + 
+  annotate("text", 2, y = 2.18, label = "**", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 1.5, label = "**", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "F", cex=16)  
+F.Y.H.p
+
+F.Ta.N.p <- ggplot(subset(TAG, Sex=="female" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("Triglycerides") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.3, label = "***", cex=12) + 
+  annotate("text", 2, y = 2.5, label = "**", cex=12) + 
+  annotate("text", 3, y = 2.05, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 2.05, label = "***", cex=12) + 
+  annotate("text", 6, y = 1.35, label = "***", cex=12) +
+  annotate("text", 6, y = 0.08, label = "G", cex=16)  
+F.Ta.N.p
+
+F.Ta.L.p <- ggplot(subset(TAG, Sex=="female" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(-0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.9, label = "***", cex=12) + 
+  annotate("text", 2, y = 2.35, label = "***", cex=12) + 
+  annotate("text", 3, y = 1.2, label = "**", cex=12) + 
+  annotate("text", 4, y = 2.5, label = "***", cex=12) + 
+  annotate("text", 5, y = 1.78, label = "*", cex=12) + 
+  annotate("text", 6, y = 1.22, label = "***", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "H", cex=16)  
+F.Ta.L.p
+
+F.Ta.H.p <- ggplot(subset(TAG, Sex=="female" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 2.08, label = "*", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 2.5, label = "***", cex=12) + 
+  annotate("text", 4, y = 1.92, label = "", cex=12) + 
+  annotate("text", 5, y = 1.92, label = "***", cex=12) + 
+  annotate("text", 6, y = 1, label = "***", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "I", cex=16) 
+F.Ta.H.p
+
+
+F.Fit.N.p <- ggplot(subset(Fitness, Sex=="female" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Fitness), fill="#cccccc") + ggtitle("Fitness") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 2.5, label = "**", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 2.48, label = "**", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "J", cex=16) 
+F.Fit.N.p
+
+F.Fit.L.p <- ggplot(subset(Fitness, Sex=="female" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Fitness), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "K", cex=16) 
+F.Fit.L.p
+
+F.Fit.H.p <- ggplot(subset(Fitness, Sex=="female" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Fitness), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 2.5, label = "*", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 2.485, label = "***", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "L", cex=16)  
+F.Fit.H.p
+
+
+
+
+#Males
+M.G.N.p <- ggplot(subset(Glucose, Sex=="male" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("Glucose") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.85, label = "*", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "A", cex=16) 
+M.G.N.p
+
+M.G.L.p <- ggplot(subset(Glucose, Sex=="male" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "B", cex=16)  
+M.G.L.p
+
+M.G.H.p <- ggplot(subset(Glucose, Sex=="male" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Glucose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.3, label = "*", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "C", cex=16) 
+M.G.H.p
+
+
+M.T.N.p <- ggplot(subset(Trehalose, Sex=="male" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("Trehalose") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "D", cex=16) 
+M.T.N.p
+
+M.T.L.p <- ggplot(subset(Trehalose, Sex=="male" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "E", cex=16) 
+M.T.L.p
+
+M.T.H.p <- ggplot(subset(Trehalose, Sex=="male" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Trehalose), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "F", cex=16)  
+M.T.H.p
+
+
+M.Y.N.p <- ggplot(subset(Glycogen, Sex=="male" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("Glycogen") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.75, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 1.25, label = "*", cex=12) +
+  annotate("text", 6, y = 0.08, label = "G", cex=16)  
+M.Y.N.p
+
+M.Y.L.p <- ggplot(subset(Glycogen, Sex=="male" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.55, label = "", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.3, label = "*", cex=12) + 
+  annotate("text", 6, y = 1.27, label = "***", cex=12) +
+  annotate("text", 6, y = 0.08, label = "H", cex=16) 
+M.Y.L.p
+
+M.Y.H.p <- ggplot(subset(Glycogen, Sex=="male" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Glycogen), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 2.35, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.35, label = "*", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "I", cex=16) 
+M.Y.H.p
+
+M.Ta.N.p <- ggplot(subset(TAG, Sex=="male" & Treatment=="NSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("Triglycerides") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.2, label = "***", cex=12) +
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.2, label = "*", cex=12) + 
+  annotate("text", 5, y = 2.15, label = "*", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12)  +
+  annotate("text", 6, y = 0.08, label = "J", cex=16) 
+M.Ta.N.p
+
+M.Ta.L.p <- ggplot(subset(TAG, Sex=="male" & Treatment=="LSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 0.9, label = "**", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.13, label = "**", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 2.5, label = "***", cex=12) +
+  annotate("text", 6, y = 0.08, label = "K", cex=16) 
+M.Ta.L.p
+
+M.Ta.H.p <- ggplot(subset(TAG, Sex=="male" & Treatment=="HSD")) + geom_boxplot(aes(x=Generation, y=Triglycerides), fill="#cccccc") + ggtitle("") + ylab(" ") + xlab(" ") + theme_bw() + geom_hline(aes(yintercept=1.0), color="black", linetype="dashed")  + scale_y_continuous(limits=c(0, 2.5)) + theme(legend.position="none", axis.text=element_text(size=25), axis.title.y = element_text(size = rel(2.5), angle = 90), plot.title = element_text(size = rel(3), hjust = 0.5)) + 
+  annotate("text", 1, y = 2.2, label = "***", cex=12) + 
+  annotate("text", 2, y = 1.75, label = "", cex=12) + 
+  annotate("text", 3, y = 0.55, label = "", cex=12) + 
+  annotate("text", 4, y = 1.75, label = "", cex=12) + 
+  annotate("text", 5, y = 1.6, label = "", cex=12) + 
+  annotate("text", 6, y = 0.08, label = "", cex=12) +
+  annotate("text", 6, y = 0.08, label = "L", cex=16) 
+M.Ta.H.p
+
+
+# f <- grid.arrange(F.G.N.p, F.T.N.p, F.Y.N.p, F.Ta.N.p, F.Fit.N.p, F.G.L.p, F.T.L.p, F.Y.L.p, F.Ta.L.p, F.Fit.L.p, F.G.H.p, F.T.H.p, F.Y.H.p, F.Ta.H.p, F.Fit.H.p, nrow=3, top=textGrob("Females", gp = gpar(fontface=2, fontsize=60)), bottom=textGrob("Generations", gp = gpar(fontface=1, fontsize=35)), left=textGrob("HSD                                               LSD                                                 NSD \n% relative to CD mean                % relative to CD mean                  % relative to CD mean", rot=90, gp = gpar(fontface=1, fontsize=35)))
+# 
+# ggsave("All Females Ch2.png", f, width = 30, height = 20, units = "in")
+
+
+
+fGYTa <- grid.arrange(F.G.N.p, F.Y.N.p, F.Ta.N.p, F.Fit.N.p, F.G.L.p, F.Y.L.p, F.Ta.L.p, F.Fit.L.p, F.G.H.p, F.Y.H.p, F.Ta.H.p, F.Fit.H.p, nrow=3, top=textGrob("Females", gp = gpar(fontface=2, fontsize=60)), bottom=textGrob("Generations", gp = gpar(fontface=1, fontsize=35)), left=textGrob("HSD                                          LSD                                        NSD \n% relative to CD mean          % relative to CD mean         % relative to CD mean", rot=90, gp = gpar(fontface=1, fontsize=35)))
+
+ggsave("Figure 2 Main.png", fGYTa, width = 30, height = 20, units = "in")
+
+
+fT <- grid.arrange(F.T.N.p, F.T.L.p, F.T.H.p, nrow=3, top=textGrob("Female Trehalose", gp = gpar(fontface=2, fontsize=60)), bottom=textGrob("Generations", gp = gpar(fontface=1, fontsize=35)), left=textGrob("HSD                                          LSD                                        NSD \n% relative to CD mean          % relative to CD mean         % relative to CD mean", rot=90, gp = gpar(fontface=1, fontsize=35)))
+
+ggsave("Supplementary Figure 1_Female Trehalose.png", fT, width = 8.25, height = 20, units = "in")
+
+
+m <- grid.arrange(M.G.N.p, M.T.N.p, M.Y.N.p, M.Ta.N.p, M.G.L.p, M.T.L.p, M.Y.L.p, M.Ta.L.p, M.G.H.p, M.T.H.p, M.Y.H.p, M.Ta.H.p, nrow=3, top=textGrob("Males", gp = gpar(fontface=2, fontsize=60)), bottom=textGrob("Generations", gp = gpar(fontface=1, fontsize=35)), left=textGrob("HSD                                          LSD                                        NSD \n% relative to CD mean          % relative to CD mean         % relative to CD mean", rot=90, gp = gpar(fontface=1, fontsize=35)))
+
+ggsave("Supplementary Figure 2_Male All.png", m, width = 30, height = 20, units = "in")
+
+```
+H3: Relationships Between Treatments
+```{r}
+############################################
+###### Correlations ######
+
+##ARE THERE RELATIONSHIPS BETWEEN TRANSGENERATIONAL TREATMENT TRENDS?##
+
+CorrData <- data
+
+#Remove F0 Generation
+CorrData <- CorrData[with(CorrData, order(Generation)),]
+CorrData <- CorrData[-c(1:164),]
+
+#Separate Metabolites/Fitness data points
+Sugar <- CorrData[,c(1:3,5:8)] #Sugar Data only
+Sugar <- Sugar[complete.cases(Sugar),] #removes NAs
+Fat <- CorrData[,c(1:3,9:10)] #Fat Data Only
+Fat <- Fat[complete.cases(Fat),]
+Fit <- CorrData[,c(1:3,11:12)] #Fitness Data Only
+Fit <- Fit[complete.cases(Fit),]
+
+#Normalize Values Across Generations ((Treatment/Wt)/(Control/Wt))
+#SUGARS (Glucose, Trehalose, Glycogen)
+Sugar.m <- melt(Sugar, 
+    id.vars=c("Generation", "Treatment", "Sex", "Sugar.Weight"), 
+    measure.vars=c("Glucose", "Trehalose", "Glycogen"))
+colnames(Sugar.m)[5] <- "Metabolite"
+SW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+  for(i in unique(Sugar.m$Generation))
+    for(j in unique(Sugar.m$Sex))
+      for(k in unique(Sugar.m$Treatment))
+        for(l in unique(Sugar.m$Metabolite)){
+        temp <- subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)
+        temp$SugarWt <- ((subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)$value)/(subset(Sugar.m, Generation == i & Sex == j & Treatment == k & Metabolite == l)$Sugar.Weight))
+        SW <- rbind(SW, temp)}
+SW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+  for(i in unique(SW$Generation))
+    for(j in unique(SW$Sex))
+      for(k in unique(SW$Treatment))
+        for(l in unique(SW$Metabolite)){
+        temp <- subset(SW, Generation == i & Sex == j & Treatment == k & Metabolite == l)
+        temp$PercentMetabWt <- (subset(SW, Generation == i & Sex == j & Treatment == k & Metabolite == l)$SugarWt)/mean(subset(SW, Generation == i & Sex == j & Treatment == "CD" & Metabolite == l)$SugarWt)
+SW.Norm <-  rbind(SW.Norm, temp)
+      }
+SW.Norm <- SW.Norm[with(SW.Norm, order(Metabolite)),]
+Glucose <- SW.Norm[c(1:1489),c(1:3,8)]
+Trehalose <- SW.Norm[c(1490:2978),c(1:3,8)]
+Glycogen <- SW.Norm[c(2979:4467),c(1:3,8)]
+
+
+#TAG
+TW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(Fat$Generation))
+    for(j in unique(Fat$Sex))
+      for(k in unique(Fat$Treatment)){
+        temp <- subset(Fat, Generation == i & Sex == j & Treatment == k)
+        temp$TAGWt <- ((subset(Fat, Generation == i & Sex == j & Treatment == k)$TAG)/(subset(Fat, Generation == i & Sex == j & Treatment == k)$Fat.Weight))
+        TW <- rbind(TW, temp)}
+TW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(TW$Generation))
+    for(j in unique(TW$Sex))
+      for(k in unique(TW$Treatment)){
+        temp <- subset(TW, Generation == i & Sex == j & Treatment == k)
+        temp$PercentMetabWt <- (subset(TW, Generation == i & Sex == j & Treatment == k)$TAGWt)/mean(subset(TW, Generation == i & Sex == j & Treatment == "CD")$TAGWt)
+TW.Norm <-  rbind(TW.Norm, temp)
+      }
+TAG <- TW.Norm[,c(1:3,7)]
+
+
+#FIT
+Fit <- Fit[with(Fit, order(Fitness)),]
+Fit <- Fit[-c(601:1496),]
+FitW <- data.frame(Generation=character(), Sex=character(), Treatment=character(), Fit=numeric())
+  for(i in unique(Fit$Generation))
+    for(j in unique(Fit$Sex))
+      for(k in unique(Fit$Treatment)){
+        temp <- subset(Fit, Generation == i & Sex == j & Treatment == k)
+        temp$FitWt <- ((subset(Fit, Generation == i & Sex == j & Treatment == k)$Fitness)/(subset(Fit, Generation == i & Sex == j & Treatment == k)$Fit.Weight))
+        FitW <- rbind(FitW, temp)}
+FitW.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), TAG=numeric())
+  for(i in unique(FitW$Generation))
+    for(j in unique(FitW$Sex))
+      for(k in unique(FitW$Treatment)){
+        temp <- subset(FitW, Generation == i & Sex == j & Treatment == k)
+        temp$PercentMetabWt <- (subset(FitW, Generation == i & Sex == j & Treatment == k)$FitWt)/mean(subset(FitW, Generation == i & Sex == j & Treatment == "CD")$FitWt)
+FitW.Norm <-  rbind(FitW.Norm, temp)
+      }
+Fitness <- FitW.Norm[,c(1:3,7)]
+
+
+#Create Dataframe of Means for each unique Treatment*Generation*Sex
+GlucoseCorr <-aggregate(Glucose$PercentMetabWt, by = list(Glucose$Generation, Glucose$Treatment, Glucose$Sex),  mean)
+colnames(GlucoseCorr)[1:4] <- c("Generation", "Treatment", "Sex", "Glucose")
+
+TrehaloseCorr <-aggregate(Trehalose$PercentMetabWt, by = list(Trehalose$Generation, Trehalose$Treatment, Trehalose$Sex),  mean)
+colnames(TrehaloseCorr)[1:4] <- c("Generation", "Treatment", "Sex", "Trehalose")
+
+GlycogenCorr <-aggregate(Glycogen$PercentMetabWt, by = list(Glycogen$Generation, Glycogen$Treatment, Glycogen$Sex),  mean)
+colnames(GlycogenCorr)[1:4] <- c("Generation", "Treatment", "Sex", "Glycogen")
+
+TAGCorr <-aggregate(TAG$PercentMetabWt, by = list(TAG$Generation, TAG$Treatment, TAG$Sex),  mean)
+colnames(TAGCorr)[1:4] <- c("Generation", "Treatment", "Sex", "TAG")
+
+FitnessCorr <-aggregate(Fitness$PercentMetabWt, by = list(Fitness$Generation, Fitness$Treatment, Fitness$Sex),  mean)
+colnames(FitnessCorr)[1:4] <- c("Generation", "Treatment", "Sex", "Fitness")
+
+CombinedMetabolites <- join_all(list(GlucoseCorr, TrehaloseCorr, GlycogenCorr, TAGCorr, FitnessCorr), by=c('Generation', 'Treatment', 'Sex'), type='full')
+
+
+#Remove Controls from Data (all = to 1, given normalization)
+CombinedMetabolites <- CombinedMetabolites[!grepl("CD", CombinedMetabolites$Treatment),]
+
+##COMBINED CORR.TEST
+#Melt Data 
+CombinedMetabolites.m <- melt(CombinedMetabolites, id.vars=c("Generation", "Sex", "Treatment"), measure.vars=c("Glucose", "Trehalose", "Glycogen", "TAG"))
+CombinedMetabolites.m <- CombinedMetabolites.m[complete.cases(CombinedMetabolites.m),]
+
+
+#Separate Treatments to Run Comparisons
+Nall <- CombinedMetabolites.m[grepl("NSD", CombinedMetabolites.m$Treatment),]
+Lall <- CombinedMetabolites.m[grepl("LSD", CombinedMetabolites.m$Treatment),]
+Hall <- CombinedMetabolites.m[grepl("HSD", CombinedMetabolites.m$Treatment),]
+
+#Run Analysis:
+cor.test(Nall$value, Lall$value)
+cor.test(Nall$value, Hall$value)
+
+#Make Dataframe for Combined Plot
+Nall.p <- Nall[,c(1,2,4,5)]
+colnames(Nall.p)[1:4] <- c("Generation", "Sex", "Metabolite", "NSD")
+
+Lall.p <- Lall[,c(1,2,4,5)]
+colnames(Lall.p)[1:4] <- c("Generation", "Sex", "Metabolite", "LSD")
+
+Hall.p <- Hall[,c(1,2,4,5)]
+colnames(Hall.p)[1:4] <- c("Generation", "Sex", "Metabolite", "HSD")
+
+CombinedMetabolites.p <- join_all(list(Nall.p, Lall.p, Hall.p), by=c('Generation', 'Sex', 'Metabolite'), type='full')
+
+CombinedMetabolites.p$SexMetabolite <- paste(CombinedMetabolites.p$Sex, CombinedMetabolites.p$Metabolite)
+
+CombinedMetabolites.p$smooth <- rep("1", length(CombinedMetabolites.p$Generation))
+
+CombinedMetabolites.p$NvL <-  rep("NSD v LSD", length(CombinedMetabolites.p$Generation))
+
+CombinedMetabolites.p$NvH <-  rep("NSD v HSD", length(CombinedMetabolites.p$Generation))
+
+#Plot
+NvL_H <- ggplot() + geom_point(data=CombinedMetabolites.p, aes(x=NSD, y=LSD, color=NvL, shape=Metabolite), size=3) + geom_smooth(data=CombinedMetabolites.p, aes(x=NSD, y=LSD), method = "lm", se = FALSE, colour="red") + geom_point(data=CombinedMetabolites.p, aes(x=NSD, y=HSD, color=NvH, shape=Metabolite), size=3) + geom_smooth(data=CombinedMetabolites.p, aes(x=NSD, y=HSD), method = "lm", se = FALSE, colour="#0000FF") + theme_bw() +  scale_color_manual(values=c("#0000FF", "red")) + scale_shape_manual(values=c(15:18,0:3)) + ggtitle("Relationships Between Treatments") + ylab("LSD or HSD") +  
+  theme(axis.text=element_text(size=16),
+        axis.title=element_text(size=20),
+        plot.title = element_text(size = rel(1.75), hjust = 0.5, face="bold"), 
+        legend.title = element_text(size=14, face="bold"), 
+        legend.text = element_text(size = 14, face = "bold"), 
+        legend.key.size = unit(1, "cm")) + 
+        annotate("text", 0.85, y = 1.5, 
+            label = "NSD v HSD: \nR=0.1490687 [95% CI: -0.1703511-0.4401396] \n p=0.3586", cex=5, color="#0000FF") + annotate("text", 0.85, y = 1.7, 
+            label = "NSD v LSD: \nR=0.6075067 [95% CI: 0.365088-0.7727733] \n p=3.22e-05", cex=5, color="red") 
+
+ggsave("Relationships Between Treatments Scatterplot.png", NvL_H, width = 10, height = 8, units = "in")
+
+
+
+# ##SEPARATE METABOLITES CORR.TEST TO VERIFY COMBINING ALL WITHIN ONE CORRELATION:
+# #Separate Treatments
+# GlucoseCorr <- GlucoseCorr[with(GlucoseCorr, order(Treatment)),]
+# NG <- GlucoseCorr[c(11:20),]
+# LG <- GlucoseCorr[c(21:30),]
+# HG <- GlucoseCorr[c(31:40),]
+# cor.test(NG$Glucose, LG$Glucose)
+# cor.test(NG$Glucose, HG$Glucose)
+# 
+# TrehaloseCorr <- TrehaloseCorr[with(TrehaloseCorr, order(Treatment)),]
+# NT <- TrehaloseCorr[c(11:20),]
+# LT <- TrehaloseCorr[c(21:30),]
+# HT <- TrehaloseCorr[c(31:40),]
+# cor.test(NT$Trehalose, LT$Trehalose)
+# cor.test(NT$Trehalose, HT$Trehalose)
+# 
+# GlycogenCorr <- GlycogenCorr[with(GlycogenCorr, order(Treatment)),]
+# NY <- GlycogenCorr[c(11:20),]
+# LY <- GlycogenCorr[c(21:30),]
+# HY <- GlycogenCorr[c(31:40),]
+# cor.test(NY$Glycogen, LY$Glycogen)
+# cor.test(NY$Glycogen, HY$Glycogen)
+# 
+# TAGCorr <- TAGCorr[with(TAGCorr, order(Treatment)),]
+# NTa <- TAGCorr[c(11:20),]
+# LTa <- TAGCorr[c(21:30),]
+# HTa <- TAGCorr[c(31:40),]
+# cor.test(NTa$TAG, LTa$TAG)
+# cor.test(NTa$TAG, HTa$TAG)
+# 
+##Or further By sex and metabolite
+NGF <- GlucoseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("NSD", Treatment))
+LGF <- GlucoseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("LSD", Treatment))
+HGF <- GlucoseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NGF$Glucose, LGF$Glucose)
+cor.test(NGF$Glucose, HGF$Glucose)
+
+NTF <- TrehaloseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("NSD", Treatment))
+LTF <- TrehaloseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("LSD", Treatment))
+HTF <- TrehaloseCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NTF$Trehalose, LTF$Trehalose)
+cor.test(NTF$Trehalose, HTF$Trehalose)
+
+NYF <- GlycogenCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("NSD", Treatment))
+LYF <- GlycogenCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("LSD", Treatment))
+HYF <- GlycogenCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NYF$Glycogen, LYF$Glycogen)
+cor.test(NYF$Glycogen, HYF$Glycogen)
+
+NTaF <- TAGCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("NSD", Treatment))
+LTaF <- TAGCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("LSD", Treatment))
+HTaF <- TAGCorr %>% filter(grepl("female", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NTaF$TAG, LTaF$TAG)
+cor.test(NTaF$TAG, HTaF$TAG)
+
+NGM <- GlucoseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("NSD", Treatment))
+LGM <- GlucoseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("LSD", Treatment))
+HGM <- GlucoseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NGM$Glucose, LGM$Glucose)
+cor.test(NGM$Glucose, HGM$Glucose)
+
+NTM <- TrehaloseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("NSD", Treatment))
+LTM <- TrehaloseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("LSD", Treatment))
+HTM <- TrehaloseCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NTM$Trehalose, LTM$Trehalose)
+cor.test(NTM$Trehalose, HTM$Trehalose)
+
+NYM <- GlycogenCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("NSD", Treatment))
+LYM <- GlycogenCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("LSD", Treatment))
+HYM <- GlycogenCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NYM$Glycogen, LYM$Glycogen)
+cor.test(NYM$Glycogen, HYM$Glycogen)
+
+NTaM <- TAGCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("NSD", Treatment))
+LTaM <- TAGCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("LSD", Treatment))
+HTaM <- TAGCorr %>% filter(grepl("male", Sex)) %>% filter(grepl("HSD", Treatment))
+cor.test(NTaM$TAG, LTaM$TAG)
+cor.test(NTaM$TAG, HTaM$TAG)
+
+```
+Pilot vs Main Study
+```{r}
+dataPM <- data <- read.csv(text=getURL("https://raw.githubusercontent.com/cemborski/DynamicTransgenerationalPlasticity_SupplementaryMaterials/master/PilotvMain_Data.csv"), header=T)
+
+dataPM.m <- melt(dataPM, id.vars=c("Study", "Generation", "Sex", "Treatment", "Sugar.Weight"), measure.vars=c("Glucose", "Trehalose", "Glycogen"))
+  
+
+#Create dataframe that normalizes each generation to controls in order to account for standard degradation (and minor variation due to hand mixing of standards) between generations.
+dataPM.SW <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+for(i in unique(dataPM.m$Study))
+  for(j in unique(dataPM.m$Generation))
+    for(k in unique(dataPM.m$Sex))
+      for(l in unique(dataPM.m$Treatment))
+        for(m in unique(dataPM.m$variable)){
+        temp <- subset(dataPM.m, Study == i & Generation == j & Sex == k & Treatment == l & variable == m)
+        temp$MetabWt <- ((subset(dataPM.m, Study == i & Generation == j & Sex == k & Treatment == l & variable == m)$value)/(subset(dataPM.m, Study == i & Generation == j & Sex == k & Treatment == l & variable == m)$Sugar.Weight))
+        dataPM.SW <- rbind(dataPM.SW, temp)}
+
+dataPM.Norm <- data.frame(Study=character(), Generation=character(), Sex=character(), Treatment=character(), variable=character(), value=numeric())
+for(i in unique(dataPM.SW$Study))
+  for(j in unique(dataPM.SW$Generation))
+    for(k in unique(dataPM.SW$Sex))
+      for(l in unique(dataPM.SW$Treatment))
+        for(m in unique(dataPM.SW$variable)){
+        temp <- subset(dataPM.SW, Study == i & Generation == j & Sex == k & Treatment == l & variable == m)
+        temp$PercentMetabWt <- (subset(dataPM.SW, Study == i & Generation == j & Sex == k & Treatment == l & variable == m)$MetabWt)/mean(subset(dataPM.SW, Study == i & Generation == j & Sex == k & Treatment == "CD" & variable == m)$MetabWt)
+dataPM.Norm <-  rbind(dataPM.Norm, temp)
+      }
+
+
+
+dataPM.Norm.mean <-aggregate(dataPM.Norm$PercentMetabWt, by = list(dataPM.Norm$Study, dataPM.Norm$Generation, dataPM.Norm$Treatment, dataPM.Norm$Sex, dataPM.Norm$variable),  mean)
+
+colnames(dataPM.Norm.mean)[1:5] <- c("Study", "Generation", "Treatment", "Sex", "Metabolite")
+
+#Remove Controls from Data (all = to 1, given normalization)
+dataPM.Norm.mean <- dataPM.Norm.mean[with(dataPM.Norm.mean, order(Treatment)),]
+dataPM.Norm.mean <- dataPM.Norm.mean[-c(1:72),]
+
+#Arrange Dataframe to plot main vs. pilot
+dataPM.Norm.mean <- dataPM.Norm.mean[with(dataPM.Norm.mean, order(Study)),]
+dataP.Norm.mean <- dataPM.Norm.mean[-c(1:108),]
+dataM.Norm.mean <- dataPM.Norm.mean[-c(109:216),]
+PlotDataPM <- merge(dataP.Norm.mean, dataM.Norm.mean, by=c("Generation", "Treatment", "Sex", "Metabolite"))
+colnames(PlotDataPM)[c(6,8)] <- c("Pilot", "Main")
+PlotDataPM <- PlotDataPM[,-c(5,7)]
+PlotDataPM$SexTreatment <- paste(PlotDataPM$Sex,PlotDataPM$Treatment)
+PlotDataPM$smooth <- rep("1", length(PlotDataPM$Generation))
+
+
+#What is the relationship between the pilot and main studies?
+cor.test(PlotDataPM$Pilot, PlotDataPM$Main)
+
+Main_v_Pilot.p <- ggplot(PlotDataPM,aes(x=Pilot, y=Main, color=Generation, shape=SexTreatment)) + 
+  geom_point(size=3) + 
+  theme_bw() + 
+  ggtitle("Relationship Between Main and Pilot Studies")  + 
+  theme(axis.text=element_text(size=16),
+        axis.title=element_text(size=20),
+        plot.title = element_text(size = rel(1.75), hjust = 0.5, face="bold"), 
+        legend.title = element_text(size=14, face="bold"), 
+        legend.text = element_text(size = 14, face = "bold"), 
+        legend.key.size = unit(1, "cm")) + 
+        geom_smooth(aes(group=smooth), color="black", method="lm") + 
+        annotate("text", 0.85, y = 1.75, 
+            label = "R=0.501 [95% CI: 0.345-0.630] \n p=3.334e-08", cex=5) + 
+        scale_color_manual(values=c( "#CC33FF","#0000FF","#33FFFF", "#00FF66","#FFFF00","#FF3300")) + scale_shape_manual(values=c(15:17,0:2))
+
+
+ggsave("Supplementary Figure 3_Main vs Pilot Relationship.png", Main_v_Pilot.p, width = 10, height = 8, units = "in")
+
+
+
+```
+
+
+
